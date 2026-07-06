@@ -1,0 +1,61 @@
+report_types:
+  sp_search_term:
+    name: Sponsored Products Search Term Report
+    ad_type: Sponsored Products
+    required_any: [search_term, campaign, clicks, spend]
+    weighted_fields: [search_term, targeting, match_type]
+  sp_targeting:
+    name: Sponsored Products Targeting Report
+    ad_type: Sponsored Products
+    required_any: [targeting, campaign, clicks, spend]
+    weighted_fields: [targeting, bid, match_type]
+  sp_advertised_product:
+    name: Sponsored Products Advertised Product Report
+    ad_type: Sponsored Products
+    required_any: [sku, asin, campaign, spend]
+    weighted_fields: [sku, asin]
+  sp_campaign:
+    name: Sponsored Products Campaign Report
+    ad_type: Sponsored Products
+    required_any: [campaign, budget, spend]
+    weighted_fields: [campaign, budget]
+  sb_search_term:
+    name: Sponsored Brands Search Term Report
+    ad_type: Sponsored Brands
+    required_any: [search_term, campaign, clicks, spend]
+    weighted_fields: [search_term]
+  sb_campaign:
+    name: Sponsored Brands Campaign Report
+    ad_type: Sponsored Brands
+    required_any: [campaign, budget, spend]
+    weighted_fields: [campaign, budget]
+  sd_campaign:
+    name: Sponsored Display Campaign Report
+    ad_type: Sponsored Display
+    required_any: [campaign, budget, spend]
+    weighted_fields: [campaign, budget]
+  placement:
+    name: Placement Report
+    ad_type: Mixed
+    required_any: [placement, campaign, spend]
+    weighted_fields: [placement]
+  business:
+    name: Business Report
+    ad_type: Retail
+    required_any: [sku, asin, total_sales]
+    weighted_fields: [organic_sales, total_sales]
+  sqp:
+    name: Search Query Performance Report
+    ad_type: Retail
+    required_any: [search_term, clicks]
+    weighted_fields: [search_term]
+  bulk:
+    name: Bulk Operations File
+    ad_type: Mixed
+    required_any: [campaign, bid]
+    weighted_fields: [campaign_status, bid]
+  purchased_product:
+    name: Purchased Product Report
+    ad_type: Mixed
+    required_any: [asin, orders, sales]
+    weighted_fields: [asin, sku]
