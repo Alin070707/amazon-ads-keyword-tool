@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: amazon-ads-optimizer
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port=$PORT
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
