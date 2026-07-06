@@ -1,0 +1,80 @@
+rules:
+  high_spend_no_orders:
+    enabled: true
+    priority: P0
+    severity: 高
+    min_clicks_setting: min_clicks
+    min_spend_factor: 1.0
+    action: Decrease Bid
+    max_bid_down_pct: 0.30
+  acos_far_above_target:
+    enabled: true
+    priority: P0
+    severity: 高
+    multiplier: 1.3
+    action: Decrease Bid
+    max_bid_down_pct: 0.30
+  acos_slightly_above_target:
+    enabled: true
+    priority: P1
+    severity: 中
+    multiplier: 1.3
+    action: Decrease Bid
+    min_down_pct: 0.05
+    max_down_pct: 0.15
+  low_acos_stable_orders:
+    enabled: true
+    priority: P1
+    severity: 低
+    multiplier: 0.7
+    action: Increase Bid
+  low_ctr:
+    enabled: true
+    priority: P2
+    severity: 中
+    relative_to_average: 0.55
+    action: Check Listing
+  high_ctr_low_cvr:
+    enabled: true
+    priority: P1
+    severity: 中
+    ctr_relative_to_average: 1.2
+    cvr_relative_to_average: 0.55
+    action: Check Listing
+  low_impression_good_conversion:
+    enabled: true
+    priority: P1
+    severity: 低
+    action: Increase Bid
+  search_term_harvest:
+    enabled: true
+    priority: P1
+    severity: 低
+    action: Harvest Search Term
+  search_term_negative:
+    enabled: true
+    priority: P0
+    severity: 高
+    action: Add Negative Exact
+  duplicate_targeting:
+    enabled: true
+    priority: P2
+    severity: 中
+    action: Observe
+  placement_optimization:
+    enabled: true
+    priority: P1
+    severity: 中
+    action: Increase Placement
+  abnormal_cpc:
+    enabled: true
+    priority: P0
+    severity: 高
+    cpc_to_break_even_factor: 1.2
+    action: Decrease Bid
+  traffic_structure_risk:
+    enabled: true
+    priority: P2
+    severity: 中
+    brand_spend_share_warning: 0.55
+    action: Observe
