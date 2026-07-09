@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+from io import BytesIO
 
 import pandas as pd
 import plotly.express as px
@@ -29,14 +30,22 @@ def load_settings() -> dict:
     return load_yaml(DEFAULT_SETTINGS_PATH)
 
 
-def analyze_files(files, settings: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
+def settings_cache_key(settings: dict) -> str:
+    return yaml.safe_dump(settings, allow_unicode=True, sort_keys=True)
+
+
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=6)
+def analyze_file_payloads(file_payloads: tuple[tuple[str, bytes], ...], settings_key: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    settings = yaml.safe_load(settings_key) or {}
     mapper = FieldMapper()
     detector = ReportDetector()
     cleaned_frames = []
     metadata_rows = []
 
-    for file in files:
-        for table in read_uploaded_file(file, filename=file.name):
+    for filename, data in file_payloads:
+        file_obj = BytesIO(data)
+        file_obj.name = filename
+        for table in read_uploaded_file(file_obj, filename=filename):
             if table.frame.empty:
                 metadata_rows.append({"文件": table.source_file, "状态": "读取失败", "说明": "; ".join(table.errors)})
                 continue
@@ -61,12 +70,45 @@ def analyze_files(files, settings: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
 
     combined = combine_cleaned(cleaned_frames)
     if not combined.empty:
-        combined = add_profit_metrics(combined, settings)
+        # 搜索词诊断台优先让大文件快速出结果；完整利润和逐行竞价留给主系统/汇总策略再计算。
         combined = add_core_metrics(combined, settings)
-        combined = add_confidence(combined, settings)
-        combined = add_bid_recommendations(combined, settings)
     return combined, pd.DataFrame(metadata_rows)
 
+
+def analyze_files(files, settings: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
+    payloads: list[tuple[str, bytes]] = []
+    for file in files:
+        name = getattr(file, "name", "uploaded_file")
+        if hasattr(file, "getvalue"):
+            data = file.getvalue()
+        else:
+            data = file.read()
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        payloads.append((name, bytes(data)))
+    return analyze_file_payloads(tuple(payloads), settings_cache_key(settings))
+
+
+@st.cache_data(show_spinner=False, ttl=3600, max_entries=8)
+def build_product_tables_cached(cleaned: pd.DataFrame, settings_key: str) -> dict[str, pd.DataFrame]:
+    settings = yaml.safe_load(settings_key) or {}
+    return product_group_keyword_tables(cleaned, settings)
+
+
+@st.cache_data(show_spinner=False, ttl=1800, max_entries=12)
+def build_strategy_tables_cached(analysis_base: pd.DataFrame, settings_key: str) -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame], dict[str, pd.DataFrame], pd.DataFrame, pd.DataFrame]:
+    settings = yaml.safe_load(settings_key) or {}
+    run_full_strategy = (not fast_mode) or len(analysis_base) <= 12000
+    if run_full_strategy:
+        classic_tables, strategy_tables, architecture_tables, readable_strategy, recommendation_audit = build_strategy_tables_cached(analysis_base, settings_key)
+    else:
+        classic_tables = search_term_insight_tables(analysis_base, settings)
+        strategy_tables = {"strategy_summary": pd.DataFrame(), "reduce_acos": pd.DataFrame(), "efficient_budget": pd.DataFrame(), "rank_push": pd.DataFrame()}
+        architecture_tables = {"campaign_plan": pd.DataFrame(), "keyword_plan": pd.DataFrame()}
+        readable_strategy = pd.DataFrame()
+        recommendation_audit = build_recommendation_audit(analysis_base, architecture_tables["campaign_plan"], architecture_tables["keyword_plan"], settings)
+        st.info("已开启大文件快速模式：先显示概览、筛选和搜索词表。需要Campaign重构和竞价策略时，请在左侧关闭“大文件快速模式”后重新运行。")
+    return classic_tables, strategy_tables, architecture_tables, readable_strategy, recommendation_audit
 
 def parse_yaml_text(text: str, fallback):
     try:
@@ -343,6 +385,7 @@ def main() -> None:
         settings["min_orders"] = st.number_input("最低订单判断门槛", 1, 1000, int(settings.get("min_orders", 2)), 1)
         settings["analysis_days"] = st.number_input("报表天数", 1, 365, int(settings.get("analysis_days", 30)), 1)
         settings["product_price"] = st.number_input("产品售价", 0.0, 9999.0, float(settings.get("product_price", 25)), 0.5, format="%.2f")
+        fast_mode = st.checkbox("大文件快速模式", value=True, help="上传4万行以上报表时建议开启：先显示概览和筛选，减少首次加载等待。")
 
         st.divider()
         st.header("推排名核心词")
@@ -395,7 +438,8 @@ def main() -> None:
         st.error("当前文件没有识别到搜索词字段。请确认报表里有 Search Term / Customer Search Term / 客户搜索词。")
         return
 
-    all_tables = product_group_keyword_tables(cleaned, settings)
+    settings_key = settings_cache_key(settings)
+    all_tables = build_product_tables_cached(cleaned, settings_key)
     filter_source = all_tables["product_group_terms"]
     filters = render_filters(filter_source, "standalone")
 
@@ -465,6 +509,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
 
 
 
