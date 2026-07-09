@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import re
 
@@ -27,10 +27,7 @@ def stem_token(token: str) -> str:
         return token
     for suffix in ["ing", "ers", "er", "ies", "ied", "ed", "es", "s"]:
         if token.endswith(suffix) and len(token) - len(suffix) >= 3:
-            if suffix in {"ies", "ied"}:
-                token = token[:-3] + "y"
-            else:
-                token = token[: -len(suffix)]
+            token = token[:-3] + "y" if suffix in {"ies", "ied"} else token[: -len(suffix)]
             if len(token) >= 2 and token[-1] == token[-2]:
                 token = token[:-1]
             return token
@@ -56,8 +53,6 @@ def term_scene(term: str) -> str:
     root = term_root(term)
     modifiers = [t for t in tokens if t != root]
     return " ".join([root] + modifiers[:3])
-
-
 
 
 def term_phrase_tokens(term: str) -> list[str]:
@@ -115,8 +110,7 @@ def build_phrase_root_map(grouped: pd.DataFrame, settings: dict) -> dict[str, st
             continue
         if good_count == 0 and float(stats["clicks"]) < min_clicks:
             continue
-        score = float(stats["score"]) + term_count * 5 + good_count * 12 + len(phrase.split()) * 4
-        candidates[phrase] = score
+        candidates[phrase] = float(stats["score"]) + term_count * 5 + good_count * 12 + len(phrase.split()) * 4
 
     root_map: dict[str, str] = {}
     for term in grouped["search_term"].fillna("").astype(str):
@@ -128,6 +122,7 @@ def build_phrase_root_map(grouped: pd.DataFrame, settings: dict) -> dict[str, st
             parts = scene.split()
             root_map[term] = " ".join(parts[: min(3, len(parts))]) if len(parts) >= 2 else term_root(term)
     return root_map
+
 
 def extract_asin_from_text(value: object) -> str:
     match = ASIN_PATTERN.search(str(value or ""))
@@ -155,13 +150,13 @@ def add_product_group_columns(frame: pd.DataFrame, settings: dict) -> pd.DataFra
     asin_to_group = {}
     for group_name, asins in groups.items():
         if isinstance(asins, str):
-            asins = [x.strip() for x in re.split(r"[,ï¼Œ\s]+", asins) if x.strip()]
+            asins = [x.strip() for x in re.split(r"[,，\s]+", asins) if x.strip()]
         for asin in asins or []:
             asin_to_group[str(asin).strip().upper()] = str(group_name)
 
     df["product_group"] = df["asin"].map(asin_to_group).fillna("")
-    df.loc[df["product_group"].eq("") & df["asin"].ne(""), "product_group"] = "æœªåˆ†ç»„-" + df.loc[df["product_group"].eq("") & df["asin"].ne(""), "asin"]
-    df.loc[df["product_group"].eq(""), "product_group"] = "æœªè¯†åˆ«ASIN"
+    df.loc[df["product_group"].eq("") & df["asin"].ne(""), "product_group"] = "未分组-" + df.loc[df["product_group"].eq("") & df["asin"].ne(""), "asin"]
+    df.loc[df["product_group"].eq(""), "product_group"] = "未识别ASIN"
     return df
 
 
@@ -172,12 +167,12 @@ def categorize_search_terms(frame: pd.DataFrame, settings: dict) -> pd.DataFrame
     target = settings.get("target_acos", 0.30)
     min_clicks = settings.get("min_clicks", 8)
     min_orders = settings.get("min_orders", 2)
-    df["search_term_category"] = "æ•°æ®ä¸è¶³è¯"
-    df.loc[(df["orders"] >= min_orders) & (df["acos"] <= target), "search_term_category"] = "å»ºè®®æ”¶å‰²è¯"
-    df.loc[(df["clicks"] >= min_clicks) & (df["orders"] == 0), "search_term_category"] = "é«˜èŠ±è´¹æ— è®¢å•è¯"
-    df.loc[(df["orders"] > 0) & (df["acos"] > target * 1.3), "search_term_category"] = "é«˜ACOSè¯"
-    df.loc[(df["orders"] > 0) & (df["acos"] <= target * 0.7), "search_term_category"] = "ä¼˜è´¨è¯"
-    df.loc[(df["clicks"] >= min_clicks) & (df["orders"] > 0) & (df["acos"] <= target), "search_term_category"] = "æ½œåŠ›è¯"
+    df["search_term_category"] = "数据不足词"
+    df.loc[(df["orders"] >= min_orders) & (df["acos"] <= target), "search_term_category"] = "建议收割词"
+    df.loc[(df["clicks"] >= min_clicks) & (df["orders"] == 0), "search_term_category"] = "高花费无订单词"
+    df.loc[(df["orders"] > 0) & (df["acos"] > target * 1.3), "search_term_category"] = "高ACOS词"
+    df.loc[(df["orders"] > 0) & (df["acos"] <= target * 0.7), "search_term_category"] = "优质词"
+    df.loc[(df["clicks"] >= min_clicks) & (df["orders"] > 0) & (df["acos"] <= target), "search_term_category"] = "潜力词"
     return df
 
 
@@ -185,10 +180,11 @@ def aggregate_search_terms(frame: pd.DataFrame, settings: dict) -> pd.DataFrame:
     if "search_term" not in frame.columns or frame.empty:
         return pd.DataFrame()
     work = frame.copy()
-    for col in ["campaign", "ad_group", "targeting", "match_type", "search_term"]:
+    for col in ["portfolio", "campaign", "ad_group", "targeting", "match_type", "search_term"]:
         if col not in work.columns:
             work[col] = ""
     grouped = work.groupby("search_term", dropna=False).agg(
+        portfolio=("portfolio", lambda x: ", ".join(sorted({str(v) for v in x if str(v)}))[:300]),
         campaign=("campaign", lambda x: ", ".join(sorted({str(v) for v in x if str(v)}))[:300]),
         ad_group=("ad_group", lambda x: ", ".join(sorted({str(v) for v in x if str(v)}))[:300]),
         targeting=("targeting", lambda x: ", ".join(sorted({str(v) for v in x if str(v)}))[:300]),
@@ -206,16 +202,9 @@ def aggregate_search_terms(frame: pd.DataFrame, settings: dict) -> pd.DataFrame:
     grouped["phrase_root"] = grouped["word_root"]
     grouped["scene_key"] = grouped["word_root"]
     grouped["term_type"] = grouped["search_term"].map(
-        lambda x: classify_term(
-            x,
-            settings.get("brand_terms", []),
-            settings.get("competitor_terms", []),
-            settings.get("core_terms", []),
-        )
+        lambda x: classify_term(x, settings.get("brand_terms", []), settings.get("competitor_terms", []), settings.get("core_terms", []))
     )
-    grouped["is_protected"] = grouped["search_term"].map(
-        lambda x: contains_any(x, settings.get("brand_terms", []) + settings.get("core_terms", []))
-    )
+    grouped["is_protected"] = grouped["search_term"].map(lambda x: contains_any(x, settings.get("brand_terms", []) + settings.get("core_terms", [])))
     grouped["seller_explanation"] = grouped.apply(_seller_explanation, axis=1, args=(settings,))
     return grouped
 
@@ -223,18 +212,15 @@ def aggregate_search_terms(frame: pd.DataFrame, settings: dict) -> pd.DataFrame:
 def product_group_keyword_tables(frame: pd.DataFrame, settings: dict) -> dict[str, pd.DataFrame]:
     empty = pd.DataFrame()
     if frame.empty or "search_term" not in frame.columns:
-        return {
-            "product_group_terms": empty,
-            "product_group_roots": empty,
-            "asin_summary": empty,
-        }
+        return {"product_group_terms": empty, "product_group_roots": empty, "asin_summary": empty}
 
     work = add_product_group_columns(frame, settings)
-    for col in ["campaign", "ad_group", "targeting", "match_type", "asin", "product_group"]:
+    for col in ["portfolio", "campaign", "ad_group", "targeting", "match_type", "asin", "product_group"]:
         if col not in work.columns:
             work[col] = ""
 
     term_group = work.groupby(["product_group", "search_term"], dropna=False).agg(
+        portfolio=("portfolio", lambda x: ", ".join(sorted({str(v) for v in x if str(v)}))[:300]),
         asin_list=("asin", lambda x: ", ".join(sorted({str(v) for v in x if str(v)}))[:300]),
         campaign=("campaign", lambda x: ", ".join(sorted({str(v) for v in x if str(v)}))[:300]),
         ad_group=("ad_group", lambda x: ", ".join(sorted({str(v) for v in x if str(v)}))[:300]),
@@ -254,10 +240,10 @@ def product_group_keyword_tables(frame: pd.DataFrame, settings: dict) -> dict[st
     target = float(settings.get("target_acos", 0.30))
     min_clicks = int(settings.get("min_clicks", 8))
     min_orders = int(settings.get("min_orders", 2))
-    term_group["keyword_status"] = "è§‚å¯Ÿ"
-    term_group.loc[(term_group["orders"] >= min_orders) & (term_group["acos"] <= target), "keyword_status"] = "è¡¨çŽ°å¥½ï¼Œå¯æ‰©é‡"
-    term_group.loc[(term_group["clicks"] >= min_clicks) & (term_group["orders"] == 0), "keyword_status"] = "å€™é€‰å¦å®š"
-    term_group.loc[(term_group["orders"] > 0) & (term_group["acos"] > target * 1.3), "keyword_status"] = "æœ‰è½¬åŒ–ä½†ACOSé«˜"
+    term_group["keyword_status"] = "观察"
+    term_group.loc[(term_group["orders"] >= min_orders) & (term_group["acos"] <= target), "keyword_status"] = "表现好，可以扩量"
+    term_group.loc[(term_group["clicks"] >= min_clicks) & (term_group["orders"] == 0), "keyword_status"] = "候选否定"
+    term_group.loc[(term_group["orders"] > 0) & (term_group["acos"] > target * 1.3), "keyword_status"] = "有转化但ACOS高"
     term_group["suggested_action"] = term_group.apply(_product_term_action, axis=1, args=(target, min_clicks, min_orders))
 
     root_rows = []
@@ -274,15 +260,16 @@ def product_group_keyword_tables(frame: pd.DataFrame, settings: dict) -> dict[st
         good_terms = grp[(grp["orders"] >= 1) & (grp["acos"] <= target)]["search_term"].head(10).tolist()
         bad_terms = grp[(grp["clicks"] >= min_clicks) & (grp["orders"] == 0)]["search_term"].head(10).tolist()
         sample_terms = grp.sort_values(["orders", "sales", "clicks"], ascending=False)["search_term"].head(20).tolist()
-        action = "åŒäº§å“ç»„åŒè¯æ ¹ï¼šå»ºè®®æ”¾å…¥åŒä¸€ä¸ªå¹¿å‘Šç»„ç»Ÿä¸€æµ‹è¯•"
+        action = "同产品组同短语词根：建议放入同一个广告组统一测试"
         if good_terms:
-            action = "åŒäº§å“ç»„åŒè¯æ ¹è¡¨çŽ°å¥½ï¼šå»ºè®®å»ºç«‹ç²¾å‡†/è¯ç»„å¹¿å‘Šç»„é›†ä¸­æ”¾é‡"
+            action = "同产品组同短语词根表现好：建议建立精准/词组广告组集中放量"
         if bad_terms and not good_terms:
-            action = "åŒäº§å“ç»„åŒè¯æ ¹è½¬åŒ–å¼±ï¼šå»ºè®®é™ä»·æµ‹è¯•ï¼Œæ˜Žæ˜¾ä¸ç›¸å…³å†å¦å®š"
+            action = "同产品组同短语词根转化弱：建议降价测试，明显不相关再否定"
         root_rows.append({
             "product_group": product_group,
+            "portfolio": ", ".join(sorted({str(v) for v in grp.get("portfolio", pd.Series(dtype=str)) if str(v)}))[:300],
             "word_root": root,
-            "suggested_ad_group_name": f"{product_group}_{root}_å…³é”®è¯ç»„",
+            "suggested_ad_group_name": f"{product_group}_{root}_关键词组",
             "terms_count": len(grp),
             "sample_terms": " | ".join(sample_terms),
             "good_terms": " | ".join(good_terms),
@@ -296,12 +283,9 @@ def product_group_keyword_tables(frame: pd.DataFrame, settings: dict) -> dict[st
         })
 
     asin_summary = work.groupby(["product_group", "asin"], dropna=False).agg(
-        search_terms=("search_term", "nunique"),
-        impressions=("impressions", "sum"),
-        clicks=("clicks", "sum"),
-        spend=("spend", "sum"),
-        orders=("orders", "sum"),
-        sales=("sales", "sum"),
+        portfolio=("portfolio", lambda x: ", ".join(sorted({str(v) for v in x if str(v)}))[:300]),
+        search_terms=("search_term", "nunique"), impressions=("impressions", "sum"), clicks=("clicks", "sum"),
+        spend=("spend", "sum"), orders=("orders", "sum"), sales=("sales", "sum"),
     ).reset_index()
     asin_summary = add_core_metrics(asin_summary, settings)
 
@@ -310,74 +294,44 @@ def product_group_keyword_tables(frame: pd.DataFrame, settings: dict) -> dict[st
         product_group_roots = product_group_roots.sort_values(["product_group", "orders", "sales", "clicks"], ascending=[True, False, False, False])
     if not term_group.empty:
         term_group = term_group.sort_values(["product_group", "orders", "sales", "spend"], ascending=[True, False, False, False])
-    return {
-        "product_group_terms": term_group,
-        "product_group_roots": product_group_roots,
-        "asin_summary": asin_summary,
-    }
+    return {"product_group_terms": term_group, "product_group_roots": product_group_roots, "asin_summary": asin_summary}
 
 
 def _product_term_action(row: pd.Series, target: float, min_clicks: int, min_orders: int) -> str:
     if row.get("orders", 0) >= min_orders and row.get("acos", 0) <= target:
-        return "è¯¥äº§å“ç»„ä¸‹è¡¨çŽ°å¥½ï¼Œå»ºè®®æ”¶å‰²ä¸ºç²¾å‡†è¯ï¼Œå¹¶ä¼˜å…ˆç”¨äºŽåŒç»„ASINã€‚"
+        return "该产品组下表现好，建议收割为精准词，并优先用于同组ASIN。"
     if row.get("clicks", 0) >= min_clicks and row.get("orders", 0) == 0:
-        return "è¯¥äº§å“ç»„ä¸‹ç‚¹å‡»è¾¾æ ‡ä½†æ— è®¢å•ï¼Œå»ºè®®äººå·¥ç¡®è®¤ç›¸å…³æ€§åŽå¦å®šæˆ–é™ä»·ã€‚"
+        return "该产品组下点击达标但无订单，建议人工确认相关性后否定或降价。"
     if row.get("orders", 0) > 0 and row.get("acos", 0) > target * 1.3:
-        return "è¯¥äº§å“ç»„ä¸‹æœ‰è½¬åŒ–ä½†ACOSåé«˜ï¼Œå»ºè®®ä¿ç•™æµé‡å¹¶é™ä½Žç«žä»·ã€‚"
-    return "æ•°æ®é‡ä¸è¶³æˆ–è¡¨çŽ°æŽ¥è¿‘ç›®æ ‡ï¼Œå»ºè®®ç»§ç»­è§‚å¯Ÿã€‚"
+        return "该产品组下有转化但ACOS偏高，建议保留流量并降低竞价。"
+    return "数据量不足或表现接近目标，建议继续观察。"
 
 
 def _empty_term_table() -> pd.DataFrame:
-    return pd.DataFrame(
-        columns=[
-            "search_term", "word_root", "scene_key", "term_type", "campaign", "ad_group",
-            "impressions", "clicks", "spend", "orders", "sales", "ctr", "cvr", "acos",
-            "recommended_action", "why", "seller_explanation",
-        ]
-    )
+    return pd.DataFrame(columns=["search_term", "word_root", "scene_key", "term_type", "campaign", "ad_group", "impressions", "clicks", "spend", "orders", "sales", "ctr", "cvr", "acos", "recommended_action", "why", "seller_explanation"])
 
 
 def search_term_insight_tables(frame: pd.DataFrame, settings: dict) -> dict[str, pd.DataFrame]:
     grouped = aggregate_search_terms(frame, settings)
     if grouped.empty:
         empty = _empty_term_table()
-        return {
-            "good_terms": empty,
-            "negative_terms": empty,
-            "ad_group_clusters": pd.DataFrame(),
-            "root_longtails": pd.DataFrame(),
-        }
+        return {"good_terms": empty, "negative_terms": empty, "ad_group_clusters": pd.DataFrame(), "root_longtails": pd.DataFrame()}
 
     target = float(settings.get("target_acos", 0.30))
     min_clicks = int(settings.get("min_clicks", 8))
     min_orders = int(settings.get("min_orders", 2))
 
-    good_terms = grouped[
-        (grouped["orders"] >= min_orders)
-        & (grouped["acos"] <= target)
-        & (grouped["sales"] > 0)
-    ].copy()
+    good_terms = grouped[(grouped["orders"] >= min_orders) & (grouped["acos"] <= target) & (grouped["sales"] > 0)].copy()
     if not good_terms.empty:
-        good_terms["recommended_action"] = "è¡¨çŽ°å¥½ï¼šå»ºè®®å•ç‹¬åšExactç²¾å‡†æŠ•æ”¾ï¼Œæˆ–æé«˜é¢„ç®—/ç«žä»·æ‰¿æŽ¥æ›´å¤šæµé‡"
-        good_terms["why"] = good_terms.apply(
-            lambda r: f"è¯¥è¯æœ‰{int(r['orders'])}å•ï¼ŒACOS {r['acos']:.1%}ä¸é«˜äºŽç›®æ ‡{target:.1%}ï¼Œé”€å”®é¢{r['sales']:.2f}ã€‚",
-            axis=1,
-        )
+        good_terms["recommended_action"] = "表现好：建议单独做Exact精准投放，或提高预算/竞价承接更多流量"
+        good_terms["why"] = good_terms.apply(lambda r: f"该词有{int(r['orders'])}单，ACOS {r['acos']:.1%}不高于目标{target:.1%}，销售额{r['sales']:.2f}。", axis=1)
     else:
         good_terms = _empty_term_table()
 
-    negative_terms = grouped[
-        (grouped["clicks"] >= min_clicks)
-        & (grouped["orders"] == 0)
-        & (grouped["spend"] > 0)
-        & (~grouped["is_protected"])
-    ].copy()
+    negative_terms = grouped[(grouped["clicks"] >= min_clicks) & (grouped["orders"] == 0) & (grouped["spend"] > 0) & (~grouped["is_protected"])].copy()
     if not negative_terms.empty:
-        negative_terms["recommended_action"] = "å»ºè®®å¦å®šï¼šå…ˆäººå·¥ç¡®è®¤ç›¸å…³æ€§ï¼Œæ˜Žæ˜¾ä¸ç›¸å…³åšNegative Exactï¼›è¯æ ¹æ˜Žæ˜¾ä¸ç›¸å…³å†è€ƒè™‘Negative Phrase"
-        negative_terms["why"] = negative_terms.apply(
-            lambda r: f"è¯¥è¯ç‚¹å‡»{int(r['clicks'])}æ¬¡ã€èŠ±è´¹{r['spend']:.2f}ï¼Œä½†æ²¡æœ‰è®¢å•ï¼Œå·²è¾¾åˆ°åˆ¤æ–­é—¨æ§›ã€‚",
-            axis=1,
-        )
+        negative_terms["recommended_action"] = "建议否定：先人工确认相关性，明显不相关做Negative Exact；词根明显不相关再考虑Negative Phrase"
+        negative_terms["why"] = negative_terms.apply(lambda r: f"该词点击{int(r['clicks'])}次、花费{r['spend']:.2f}，但没有订单，已达到判断门槛。", axis=1)
     else:
         negative_terms = _empty_term_table()
 
@@ -395,11 +349,11 @@ def search_term_insight_tables(frame: pd.DataFrame, settings: dict) -> dict[str,
         terms = grp.sort_values(["orders", "sales", "clicks"], ascending=False)["search_term"].head(15).tolist()
         best_terms = grp[(grp["orders"] > 0) & (grp["acos"] <= target)]["search_term"].head(8).tolist()
         bad_terms = grp[(grp["clicks"] >= min_clicks) & (grp["orders"] == 0) & (~grp["is_protected"])]["search_term"].head(8).tolist()
-        recommendation = "åŒè¯æ ¹/åŒåœºæ™¯ï¼šå»ºè®®æ”¾è¿›åŒä¸€ä¸ªå¹¿å‘Šç»„ï¼Œç»Ÿä¸€æµ‹è¯•å’ŒæŽ§ä»·"
+        recommendation = "同短语词根/同场景：建议放进同一个广告组，统一测试和控价"
         if best_terms:
-            recommendation = "åŒè¯æ ¹è¡¨çŽ°ä¸é”™ï¼šå»ºè®®å»ºç«‹ä¸€ä¸ªç‹¬ç«‹ç²¾å‡†/è¯ç»„å¹¿å‘Šç»„é›†ä¸­æ”¾é‡"
+            recommendation = "同短语词根表现不错：建议建立独立精准/词组广告组集中放量"
         if bad_terms and not best_terms:
-            recommendation = "åŒè¯æ ¹æ•´ä½“è½¬åŒ–å·®ï¼šå»ºè®®é›†ä¸­é™ä»·æµ‹è¯•ï¼Œæ˜Žæ˜¾ä¸ç›¸å…³è¯å†å¦å®š"
+            recommendation = "同短语词根整体转化差：建议集中降价测试，明显不相关词再否定"
         cluster_rows.append({
             "word_root": root,
             "suggested_ad_group_name": f"AG_{root}_theme",
@@ -413,7 +367,7 @@ def search_term_insight_tables(frame: pd.DataFrame, settings: dict) -> dict[str,
             "sales": total_sales,
             "acos": acos,
             "recommended_action": recommendation,
-            "why": f"è¿™äº›è¯éƒ½å›´ç»•â€œ{root}â€è¿™ä¸ªè¯æ ¹ï¼Œåˆè®¡ç‚¹å‡»{int(total_clicks)}æ¬¡ã€è®¢å•{int(total_orders)}å•ã€ACOS {acos:.1%}ã€‚",
+            "why": f"这些词都围绕“{root}”这个共同短语，合计点击{int(total_clicks)}次、订单{int(total_orders)}单、ACOS {acos:.1%}。",
         })
 
     ad_group_clusters = pd.DataFrame(cluster_rows)
@@ -427,23 +381,15 @@ def search_term_insight_tables(frame: pd.DataFrame, settings: dict) -> dict[str,
         good_terms = good_terms.sort_values(["orders", "sales"], ascending=False)[[c for c in cols if c in good_terms.columns]]
     if not negative_terms.empty:
         negative_terms = negative_terms.sort_values(["spend", "clicks"], ascending=False)[[c for c in cols if c in negative_terms.columns]]
-    return {
-        "good_terms": good_terms,
-        "negative_terms": negative_terms,
-        "ad_group_clusters": ad_group_clusters,
-        "root_longtails": root_longtails,
-    }
+    return {"good_terms": good_terms, "negative_terms": negative_terms, "ad_group_clusters": ad_group_clusters, "root_longtails": root_longtails}
 
 
 def _seller_explanation(row: pd.Series, settings: dict) -> str:
     target = float(settings.get("target_acos", 0.30))
     return (
-        f"æœç´¢è¯â€œ{row.get('search_term', '')}â€ï¼šæ›å…‰{int(row.get('impressions', 0) or 0)}ï¼Œ"
-        f"ç‚¹å‡»{int(row.get('clicks', 0) or 0)}ï¼ŒèŠ±è´¹{row.get('spend', 0):.2f}ï¼Œ"
-        f"è®¢å•{int(row.get('orders', 0) or 0)}ï¼Œé”€å”®é¢{row.get('sales', 0):.2f}ï¼Œ"
-        f"ACOS {row.get('acos', 0):.1%}ï¼Œç›®æ ‡ACOS {target:.1%}ã€‚"
+        f"搜索词“{row.get('search_term', '')}”：曝光{int(row.get('impressions', 0) or 0)}，"
+        f"点击{int(row.get('clicks', 0) or 0)}，花费{row.get('spend', 0):.2f}，"
+        f"订单{int(row.get('orders', 0) or 0)}，销售额{row.get('sales', 0):.2f}，"
+        f"ACOS {row.get('acos', 0):.1%}，目标ACOS {target:.1%}。"
     )
-
-
-
 
